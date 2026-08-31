@@ -584,26 +584,21 @@ class HomeScreenGrid(context: Context, attrs: AttributeSet, defStyle: Int) :
             // check if the destination cell is empty
             var isDroppingPositionValid = true
             val wantedCell = Pair(xIndex, yIndex)
-            // No moving folder into the dock
-            if (draggedHomeGridItem?.type == ITEM_TYPE_FOLDER && yIndex == rowCount - 1) {
-                isDroppingPositionValid = false
-            } else {
-                gridItems.filterVisibleOnCurrentPageOnly().forEach { item ->
-                    for (xCell in item.left..item.right) {
-                        for (
-                        yCell in item.getDockAdjustedTop(rowCount)
-                            .rangeTo(item.getDockAdjustedBottom(rowCount))
-                        ) {
-                            val cell = Pair(xCell, yCell)
-                            val isAnyCellOccupied = wantedCell == cell
-                            if (isAnyCellOccupied) {
-                                if (item.type == ITEM_TYPE_WIDGET && item.outOfBounds()) {
-                                    removeWidget(item)
-                                } else {
-                                    isDroppingPositionValid = false
-                                }
-                                return@forEach
+            gridItems.filterVisibleOnCurrentPageOnly().forEach { item ->
+                for (xCell in item.left..item.right) {
+                    for (
+                    yCell in item.getDockAdjustedTop(rowCount)
+                        .rangeTo(item.getDockAdjustedBottom(rowCount))
+                    ) {
+                        val cell = Pair(xCell, yCell)
+                        val isAnyCellOccupied = wantedCell == cell
+                        if (isAnyCellOccupied) {
+                            if (item.type == ITEM_TYPE_WIDGET && item.outOfBounds()) {
+                                removeWidget(item)
+                            } else {
+                                isDroppingPositionValid = false
                             }
+                            return@forEach
                         }
                     }
                 }
@@ -630,6 +625,13 @@ class HomeScreenGrid(context: Context, attrs: AttributeSet, defStyle: Int) :
                             parentId = parentId,
                             id = id!!
                         )
+
+                        if (!docked) {
+                            gridItems
+                                .filter { it.parentId == id }
+                                .forEach { it.docked = false }
+                            context.homeScreenGridItemsDB.undockFolderItems(id!!)
+                        }
 
                         if (page != oldPage && oldPage != 0) {
                             if (gridItems.none { it.page == oldPage && it.parentId == null }) {
@@ -701,7 +703,7 @@ class HomeScreenGrid(context: Context, attrs: AttributeSet, defStyle: Int) :
                                 val cell = Pair(xCell, yCell)
                                 val isAnyCellOccupied = wantedCell == cell
                                 if (isAnyCellOccupied) {
-                                    if (item.type != ITEM_TYPE_WIDGET && !item.docked) {
+                                    if (item.type != ITEM_TYPE_WIDGET) {
                                         potentialParent = item
                                     } else {
                                         if (item.type == ITEM_TYPE_WIDGET && item.outOfBounds()) {
@@ -742,6 +744,7 @@ class HomeScreenGrid(context: Context, attrs: AttributeSet, defStyle: Int) :
                         potentialParent.apply {
                             parentId = newId
                             left = 0
+                            docked = false
                             context.homeScreenGridItemsDB.updateItemPosition(
                                 left = left,
                                 top = top,
@@ -831,7 +834,7 @@ class HomeScreenGrid(context: Context, attrs: AttributeSet, defStyle: Int) :
                 right = finalXIndex
                 bottom = yIndex
                 page = pager.getCurrentPage()
-                docked = yIndex == rowCount - 1
+                docked = newParentId == null && yIndex == rowCount - 1
                 parentId = newParentId
 
                 val oldParent = gridItems.firstOrNull { it.id == oldParentId }
@@ -912,7 +915,7 @@ class HomeScreenGrid(context: Context, attrs: AttributeSet, defStyle: Int) :
                 widgetId = -1,
                 shortcutId = "",
                 icon = draggedItem!!.icon,
-                docked = yIndex == rowCount - 1,
+                docked = newParentId == null && yIndex == rowCount - 1,
                 parentId = newParentId,
                 drawable = draggedItem!!.drawable,
                 providerInfo = draggedItem!!.providerInfo,
